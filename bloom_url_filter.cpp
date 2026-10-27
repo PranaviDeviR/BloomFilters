@@ -98,3 +98,58 @@ public:
         return pow(1.0 - exp(-(double)k * (double)itemsInserted / (double)m), k);
     }
 };
+class UrlPreFilter {
+private:
+    BloomFilter bloom;
+    unordered_set<string> exactDb;
+
+public:
+    UrlPreFilter(size_t expectedItems, double fpRate) : bloom(expectedItems, fpRate) {}
+
+    bool addMalicious(const string &raw) {
+        string u = normalizeUrl(raw);
+        if (u.empty()) return false;
+        bloom.insert(u);
+        exactDb.insert(u);
+        return true;
+    }
+
+    int check(const string &raw, bool &bloomSaidMaybe) const {
+        string u = normalizeUrl(raw);
+        bloomSaidMaybe = false;
+        if (u.empty()) return 0;
+        if (!bloom.possiblyContains(u)) return 0;
+        bloomSaidMaybe = true;
+        return exactDb.count(u) ? 1 : 2;
+    }
+
+    const BloomFilter &filter() const { return bloom; }
+    size_t exactSize() const { return exactDb.size(); }
+};
+
+static void loadFile(UrlPreFilter &f, const string &path) {
+    ifstream in(path);
+    if (!in) { cout << "  Could not open file: " << path << "\n"; return; }
+    string line;
+    size_t cnt = 0;
+    while (getline(in, line))
+        if (f.addMalicious(line)) cnt++;
+    cout << "  Loaded " << cnt << " URLs from " << path << "\n";
+}
+
+static void loadSampleData(UrlPreFilter &f) {
+    const vector<string> bad = {
+        "http://free-gift-cards.xyz/claim",
+        "http://paypa1-secure-login.com/verify",
+        "https://www.bank-update-info.net/login.php",
+        "http://malware-download.ru/setup.exe",
+        "http://win-a-prize-now.top/",
+        "https://secure-appleid-verify.co/signin",
+        "http://crypto-doubler.biz/invest",
+        "http://phish-me.tk/office365",
+        "http://dl.free-software-crack.info/key.zip",
+        "http://account-suspended-alert.cc/restore"
+    };
+    for (const string &u : bad) f.addMalicious(u);
+    cout << "  Loaded " << bad.size() << " sample malicious URLs.\n";
+}
